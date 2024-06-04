@@ -31,7 +31,6 @@ ExportedObj/
 *.mdb
 *.opendb
 *.VC.db
-*.meta
 *idea/
 
 *.pidb.meta
