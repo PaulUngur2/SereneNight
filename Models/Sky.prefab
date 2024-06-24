@@ -240,13 +240,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 02b6642de4924c642bbcb6eb854d9cfc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  hour: 22
-  minute: 32
   stars: {fileID: 5861855971841812080}
-  daySkybox: {fileID: 2100000, guid: 3843a1ccc4711d74e88548857d2d7ad9, type: 2}
-  nightSkybox: {fileID: 2100000, guid: 8fda142c7402a8845a0400d3be0eac9f, type: 2}
-  MainCamera: {fileID: 0}
   timeGameObject: {fileID: 0}
+  meteor: {fileID: 0}
 --- !u!114 &5008227878562034149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -285,7 +281,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &5861855971841812080
 Transform:
   m_ObjectHideFlags: 0

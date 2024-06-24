@@ -5,10 +5,10 @@ using UnityEngine;
 
 namespace stardata
 {
-    // NOTE: All parameter values are degrees. Return values as well. Conversion to radians is internal to the methods.
+    // Static class for calculating star positions
     static class StarPosition
     {
-
+        // Method to calculate the azimuth of a star
         public static float getAzimuth(float ra, float dec, float lat, float lon, DateTime time)
         {
             float altitude = getAltitude(ra, dec, lat, lon, time);
@@ -19,11 +19,12 @@ namespace stardata
             altitude *= Mathf.Deg2Rad;
             lat *= Mathf.Deg2Rad;
 
+            // Calculate azimuth using spherical trigonometry
             float A = Mathf.Acos((Mathf.Sin(dec) - Mathf.Sin(altitude) * Mathf.Sin(lat)) / (Mathf.Cos(altitude) * Mathf.Cos(lat))) * Mathf.Rad2Deg;
             return Mathf.Sin(ha) < 0 ? A : 360 - A;
-            // return 180 + Mathf.Atan2(Mathf.Sin(ha), Mathf.Cos(ha) * Mathf.Sin(lat) - Mathf.Tan(dec) * Mathf.Cos(lat)) * Mathf.Rad2Deg;
         }
 
+        // Method to calculate the altitude of a star
         public static float getAltitude(float ra, float dec, float lat, float lon, DateTime time)
         {
             float ha = getHA(ra, time.Year, time.Month, time.Day, time.Hour + time.Minute / 60f + time.Second / 3600f, lon);
@@ -32,9 +33,11 @@ namespace stardata
             ha *= Mathf.Deg2Rad;
             lat *= Mathf.Deg2Rad;
 
+            // Calculate altitude using spherical trigonometry
             return Mathf.Asin(Mathf.Sin(dec) * Mathf.Sin(lat) + Mathf.Cos(dec) * Mathf.Cos(lat) * Mathf.Cos(ha)) * Mathf.Rad2Deg;
         }
 
+        // Method to compute the Local Sidereal Time (LST)
         public static float ComputeLST(int year, int month, int day, float hour, float lon)
         {
             float d = 367 * year - (int)(7 * (year + (month + 9) / 12) / 4) + (275 * month) / 9 + day - 730531.5f;
@@ -42,6 +45,7 @@ namespace stardata
             return Rev(100.46f + 0.985647f * d + lon + hour * 15.04107f);
         }
 
+        // Method to normalize angles to the range [0, 360)
         private static float Rev(float x)
         {
             float rv;
@@ -53,19 +57,21 @@ namespace stardata
             return rv;
         }
 
+        // Method to calculate the Hour Angle (HA)
         private static float getHA(float ra, int year, int month, int day, float hour, float longitude)
         {
             return Rev(ComputeLST(year, month, day, hour, longitude) - ra);
         }
-
     }
 
+    // Class representing a star
     public class Star
     {
         string name;
-        float ra, dec, azimuth, altitude, visualMagnitude, distance, x, y, z;
+        float ra, dec, azimuth, altitude, visualMagnitude, distance, x, y, z, r, g, b;
 
-        public Star(string name, float ra, float dec, float altitude, float azimuth, float visualMagnitude, float distance, float x, float y, float z)
+        // Constructor to initialize a star with all its properties
+        public Star(string name, float ra, float dec, float altitude, float azimuth, float visualMagnitude, float distance, float x, float y, float z, float r, float g, float b)
         {
             this.name = name;
             this.ra = ra;
@@ -77,6 +83,14 @@ namespace stardata
             this.x = x;
             this.y = y;
             this.z = z;
+            this.r = r;
+            this.g = g;
+            this.b = b;
+        }
+
+        public bool isVisible()
+        {
+            return this.altitude > 0;
         }
 
         public void setAzimuth(float azimuth)
@@ -153,31 +167,48 @@ namespace stardata
         {
             this.z = z;
         }
+
+        public float getR()
+        {
+            return this.r;
+        }
+
+        public float getG()
+        {
+            return this.g;
+        }
+
+        public float getB()
+        {
+            return this.b;
+        }
     }
 
+    // Static class to manage a collection of stars
     public static class Stars
     {
         private static List<Star> stars = new List<Star>();
 
-        public static void addStar(string name, float ra, float dec, float altitude, float azimuth, float visualMagnitude, float distance, float x, float y, float z)
+        // Method to add a new star to the collection
+        public static void addStar(string name, float ra, float dec, float altitude, float azimuth, float visualMagnitude, float distance, float x, float y, float z, float r, float g, float b)
         {
-            stars.Add(new Star(name, ra, dec, altitude, azimuth, visualMagnitude, distance, x, y, z));
+            stars.Add(new Star(name, ra, dec, altitude, azimuth, visualMagnitude, distance, x, y, z, r, g, b));
         }
 
+        // Method to get a star by index
         public static Star GetStar(int index)
         {
-            return stars[index];
+            return (index < stars.Count) ? stars[index] : null;
         }
 
+        // Method to update the position and altitude/azimuth of a star
         public static void UpdateStar(int index, float altitude, float azimuth, float x, float y, float z)
         {
-//            Debug.Log(index + " " + stars[index].getAltitude() + " " + stars[index].getAzimuth());
             stars[index].setAltitude(altitude);
             stars[index].setAzimuth(azimuth);
             stars[index].setX(x);
             stars[index].setY(y);
             stars[index].setZ(z);
-            //           Debug.Log(index + " " + stars[index].getAltitude() + " " + stars[index].getAzimuth());
         }
 
         public static int getNumberOfStars()
@@ -185,16 +216,34 @@ namespace stardata
             return stars.Count;
         }
 
+        static int noVisibleStars = 0;
+
+        public static void incrementVisibleStars()
+        {
+            noVisibleStars++;
+        }
+
+        public static void resetNumberVisibleStars()
+        {
+            noVisibleStars = 0;
+        }
+
+        public static int getNumberVisibleStars()
+        {
+            return noVisibleStars;
+        }
+
+        // Method to calculate the visual magnitude of a star after accounting for atmospheric extinction
         public static float getVisualMagnitudeAfterExtinction(int index)
         {
-            if (stars[index].getAltitude() < -2) // due to how the scene is rendered we sometimes see starts under the mathematical horizon so we make them dissapear by applying the extinction to stars below the horizon as well.
+            if (stars[index].getAltitude() < -2) // Extinction for stars below the mathematical horizon
             {
                 return stars[index].getVisualMagnitude();
             }
             else
             {
                 float z = (90 - Mathf.Abs(stars[index].getAltitude())) * Mathf.Deg2Rad;
-                float extinction = 0.2f / Mathf.Cos(z) * (1 - 0.0012f * (1 / (Mathf.Pow(Mathf.Cos(z),2) - 1))); // atmospheric extinction
+                float extinction = 0.2f / Mathf.Cos(z) * (1 - 0.0012f * (1 / (Mathf.Pow(Mathf.Cos(z),2) - 1))); // Atmospheric extinction
                 return stars[index].getVisualMagnitude() + extinction;
             }
         }

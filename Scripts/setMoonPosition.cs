@@ -6,17 +6,17 @@ using UnityEngine.UI;
 
 public class setMoonPosition : MonoBehaviour
 {
-    [SerializeField] int hour = DateTime.Now.Hour;
-    [SerializeField] int minute = DateTime.Now.Minute;
-    [SerializeField] public GameObject timeGameObject;
+    [SerializeField] int hour = DateTime.Now.Hour; // Initial hour (default to current hour)
+    [SerializeField] int minute = DateTime.Now.Minute; // Initial minute (default to current minute)
+    [SerializeField] public GameObject timeGameObject; // Reference to XRTime GameObject
 
-    private XRTime xrTime;
-    private float latitude;
-    private float longitude;
+    private XRTime xrTime; // Reference to XRTime component for time and location data
+    private float latitude; // Current latitude
+    private float longitude; // Current longitude
 
-    DateTime date;
-    MoonPosition moonPos;
-    //MoonIllumination moonIllumination;
+    DateTime date; // Variable to store current date and time
+    MoonPosition moonPos; // Variable to store Moon's position data
+
     // Start is called before the first frame update
     void Start()
     {   
@@ -25,20 +25,32 @@ public class setMoonPosition : MonoBehaviour
         longitude = xrTime.getLongitude();
     }
 
-    // Update is called once per frame
-    DateTime time;
-    void Update()
+    float crtLat, crtLon; // Variables to store current latitude and longitude
+    DateTime crtTime, newTime; // Variables to store current and updated time
+
+    // LateUpdate is called once per frame, after Update
+    public void LateUpdate()
     {
-        UpdateMoonPosition();
+        newTime = xrTime.getTime();
+
+        // Only update when the latitude, longitude, or enough time has passed
+        if (crtLat != latitude || crtLon != longitude || (Math.Abs((crtTime - newTime).TotalSeconds) > 1))
+        {
+            crtTime = newTime;
+            crtLat = latitude;
+            crtLon = longitude;
+            UpdateMoonPosition();
+        }
     }
+
+    // Method to update Moon's position based on current time and location
     private void UpdateMoonPosition()
     {
-        //moonIllumination = MoonCalc.GetMoonIllumination(date);
-        //Debug.Log("Moon pos: " + moonPos.Altitude * Mathf.Rad2Deg + " " + (180 + moonPos.Azimuth * Mathf.Rad2Deg) + " " + date.ToString());
-        //Debug.Log("Moon illumination: " + moonIllumination.Phase);
-        time = xrTime.getTime();
+        moonPos = MoonCalc.GetMoonPosition(xrTime.getTime(), latitude, longitude); // Calculate Moon's position
 
-        moonPos = MoonCalc.GetMoonPosition(xrTime.getTime(), latitude, longitude);
-        transform.eulerAngles = (new Vector3((float)(moonPos.Altitude) * Mathf.Rad2Deg, 180 + (float)moonPos.Azimuth * Mathf.Rad2Deg, 0));
+        // Set rotation of this GameObject to represent Moon's position in the sky
+        transform.eulerAngles = new Vector3((float)(moonPos.Altitude) * Mathf.Rad2Deg,
+                                            180 + (float)moonPos.Azimuth * Mathf.Rad2Deg,
+                                            0);
     }
 }

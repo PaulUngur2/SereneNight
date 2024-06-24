@@ -8,49 +8,95 @@ using UnityEngine.UI;
 
 public class setSunPosition : MonoBehaviour
 {
-    [SerializeField] int hour = DateTime.Now.Hour;
-    [SerializeField] int minute = DateTime.Now.Minute;
-    [SerializeField] private Transform stars;
-    [SerializeField] Material daySkybox;
-    [SerializeField] Material nightSkybox;
+    [SerializeField] private Transform stars; // Reference to the Transform of stars GameObject
 
-    // set the main camera in the inspector
-    [SerializeField] public Camera MainCamera;
+    [SerializeField] public GameObject timeGameObject; // GameObject containing XRTime component
 
-    [SerializeField] public GameObject timeGameObject;
+    [SerializeField] public GameObject meteor; // GameObject for meteor effect
 
-    private XRTime xrTime;
-    private float latitude;
-    private float longitude;
+    private XRTime xrTime; // Reference to XRTime component for time and location data
+    private float latitude; // Current latitude
+    private float longitude; // Current longitude
 
-    DateTime time;
-    SunPosition sunPos;
+    DateTime time; // Variable to store current time
+    SunPosition sunPos; // Variable to store Sun's position data
+    ParticleSystem starParticles; // Reference to ParticleSystem component of stars
+
     // Start is called before the first frame update
     void Start()
     {
-		xrTime = timeGameObject.GetComponent<XRTime>();
+        if (meteor != null)
+        {
+            meteor.SetActive(false);
+        }
+        xrTime = timeGameObject.GetComponent<XRTime>();
         latitude = xrTime.getLatitude();
         longitude = xrTime.getLongitude();
+        starParticles = stars.GetComponent<ParticleSystem>(); // Get ParticleSystem component from stars
     }
 
-    // Update is called once per frame
-    void Update()
+    float crtLat, crtLon; // Variables to store current latitude and longitude
+    DateTime crtTime, newTime; // Variables to store current and updated time
+    private float updateInterval = 1f / 30f; // Interval for 30 FPS
+    private float lastUpdateTime = 0f;
+
+    void LateUpdate()
     {
-        UpdateSunPosition();
+        newTime = xrTime.getTime();
+
+        // Check if enough time has passed to update
+        if (Time.time - lastUpdateTime >= updateInterval)
+        {
+            // Only update when the latitude, longitude, or enough time has passed
+            if (crtLat != latitude || crtLon != longitude || (Math.Abs((newTime - crtTime).TotalSeconds) > 1))
+            {
+                UpdateSunPosition();
+                crtTime = newTime;
+                crtLat = latitude;
+                crtLon = longitude;
+            }
+            lastUpdateTime = Time.time;
+        }
     }
 
-    ParticleSystem.Particle[] particles;
-    float fadeStarsValue;
-    float z;
+    ParticleSystem.Particle[] particles; // Array to hold ParticleSystem particles
+    float fadeStarsValue; // Variable to control star fading effect
+    Star star; // Variable to hold current star being updated
+    bool firstPass = true; // Flag to determine first update pass
+    MainModule main; // Reference to ParticleSystem's MainModule
+
+    // Method to update Sun's position and adjust star particles
     private void UpdateSunPosition()
     {
         time = xrTime.getTime();
 
-        sunPos = SunCalc.GetSunPosition(time, latitude, longitude);
+        sunPos = SunCalc.GetSunPosition(time, latitude, longitude); // Calculate Sun's position
 
-        transform.eulerAngles = new Vector3((float)(sunPos.Altitude) * Mathf.Rad2Deg, 180 + (float)sunPos.Azimuth * Mathf.Rad2Deg, 0);
+        // Adjust culling mask for light based on Sun's altitude
+        if (sunPos.Altitude < 0)
+        {
+            // Disable terrain and player layers from light culling mask
+            GetComponent<Light>().cullingMask &= ~(1 << LayerMask.NameToLayer("Terrain"));
+            GetComponent<Light>().cullingMask &= ~(1 << LayerMask.NameToLayer("Player"));
 
-        // fade stars according to the Sun's altitude
+            if (meteor != null)
+            {
+                meteor.SetActive(true); // Activate meteor effect if available
+            }
+        }
+        else
+        {
+            // Enable terrain and player layers in light culling mask
+            GetComponent<Light>().cullingMask |= 1 << LayerMask.NameToLayer("Terrain");
+            GetComponent<Light>().cullingMask |= 1 << LayerMask.NameToLayer("Player");
+        }
+
+        // Set rotation of this GameObject to represent Sun's position in the sky
+        transform.eulerAngles = new Vector3((float)(sunPos.Altitude) * Mathf.Rad2Deg,
+                                            180 + (float)sunPos.Azimuth * Mathf.Rad2Deg,
+                                            0);
+
+        // Fade stars based on Sun's altitude
         if (sunPos.Altitude * Mathf.Rad2Deg <= 0 && sunPos.Altitude * Mathf.Rad2Deg >= -12f)
         {
             fadeStarsValue = (Mathf.Abs((float)sunPos.Altitude) * Mathf.Rad2Deg) / 12f;
@@ -64,26 +110,35 @@ public class setSunPosition : MonoBehaviour
             fadeStarsValue = 1f;
         }
 
-        if (particles == null)
-        {
-            particles = new ParticleSystem.Particle[stars.GetComponent<ParticleSystem>().particleCount];
-        }
-
         // Render stars
-        stars.GetComponent<ParticleSystem>().GetParticles(particles);
-        for (int p = 0; p < particles.Length; p++)
+        particles = new ParticleSystem.Particle[Stars.getNumberVisibleStars()]; // Initialize particle array
+        int p = 0; // Counter for particles array
+        for (int i = 0; i < Stars.getNumberOfStars(); i++)
         {
-            if (p < Stars.getNumberOfStars())
+            if (p >= particles.Length)
+                continue; // Skip if particles array is full
+
+            star = Stars.GetStar(i); // Get star data from Stars collection
+
+            // Check if star is visible or on the first update pass
+            if (star.isVisible() || firstPass)
             {
-                particles[p].position = new Vector3(Stars.GetStar(p).getX(), Stars.GetStar(p).getY(), Stars.GetStar(p).getZ());
-                particles[p].position = particles[p].position.normalized;
-                particles[p].position *= 1500;
+                // Set particle position in normalized space and scale by 1500
+                particles[p].position = new Vector3(star.getX(), star.getY(), star.getZ()).normalized * 1500;
 
+                // Calculate star's size based on visual magnitude
                 particles[p].startSize = 200 * Mathf.Pow(10, (-1.44f - Stars.getVisualMagnitudeAfterExtinction(p)) / 5);
-
             }
-            particles[p].startColor = new Color(particles[p].startColor.r / 255f, particles[p].startColor.g / 255f, particles[p].startColor.b / 255f, fadeStarsValue);//where a = the alpha
+
+            // Set star's color with fading effect based on Sun's altitude
+            particles[p].startColor = new Color(star.getR(), star.getG(), star.getB(), fadeStarsValue * particles[p].startSize);
+
+            p++; // Increment particle array index
         }
-        stars.GetComponent<ParticleSystem>().SetParticles(particles, particles.Length);
+
+        firstPass = false; // Set firstPass to false after the first update
+        main = starParticles.main; // Get main module of ParticleSystem
+        main.maxParticles = particles.Length; // Set maximum particles in ParticleSystem
+        starParticles.SetParticles(particles, particles.Length); // Set particles in ParticleSystem
     }
 }
